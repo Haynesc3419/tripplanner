@@ -1,0 +1,14 @@
+TripPlanner MVP Description
+
+Problem: Planning international travel is time-consuming, fragmented, and overwhelming. Travelers must juggle where to go, how long to stay in each place, what to do, and how to book transportation and lodging — often across multiple tabs and tools.
+Solution: a web app that uses AI to guide users through major trip decisions and generate a personalized, editable travel itinerary — all in one place.
+The app walks users through their preferences (budget, interests, travel style, and trip duration) and produces a full itinerary that includes destinations, daily activities, accommodation suggestions, and transportation between cities. Users can edit the plan and export it to use on the go.
+Components
+-	User Interface (UI): 3 panel system (top-left, top-right, bottom). Top-left is a column with the chat with LLM. Top-right is a map displaying location and current route. Bottom is used for interactables: including choosing between options like hotels or transportation. There should be an icon that expands a screen showing what the current travel itinerary is. The user should be able to make modifications to the itinerary in real time.
+-	Backend and User Stories
+o	as a user I want to have the application create a trip itinerary for me by interacting with the chat and clickables. The itinerary should include: dates, times, lodging, transportation, things to do, along with their associated costs summed. 
+o	As a user I want to be able to manually change details via the current travel itinerary screen in order to change minor details without having to interact with the LLM. These changes should undergo a cleanup process via the LLM to standardize the input and make sure it seamlessly integrates with used formats.
+o	As a user, while im talking with the LLM I want it to give me options for places to stay, eat, how to travel, etc. But I also want to have the option to choose myself and in that case it will indicate that I elected to choose myself in the itinerary.
+o	As a user I want to see where I am at the current state of the trip plan geographically. For example if we are on day 3 in Vienna Austria at a specific hotel, I want to be centered at that location in the map portion.
+o	As a user I want to be able to save my itinerary and export it
+o	As a user I want to be able to see the progress of my trip planning. For example if im on day 3 out of 6, the progress bar should be approximately 50%. 

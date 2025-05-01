@@ -1,45 +1,98 @@
-import React, { useState } from 'react';
-import { Box, TextField, Button, Typography, Paper, Alert } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, TextField, Button, Paper, Typography, CircularProgress } from '@mui/material';
 import { generateTripPlan } from '../services/geminiService';
+import { conversationService } from '../services/conversationService';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
 
 interface ChatPanelProps {
   onItineraryUpdate: (itinerary: any) => void;
-  onLocationUpdate: (location: [number, number]) => void;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate, onLocationUpdate }) => {
-  const [message, setMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([]);
+export const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate }) => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Initialize with conversation history
+    const initialMessages = conversationService.getConversationHistory()
+      .split('\n')
+      .map(line => {
+        const [role, ...contentParts] = line.split(': ');
+        return {
+          role: role as 'user' | 'assistant',
+          content: contentParts.join(': '),
+          timestamp: Date.now()
+        };
+      });
+    setMessages(initialMessages);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!input.trim()) return;
 
-    const userMessage = message;
-    setMessage('');
-    setError(null);
-    setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
+    const userMessage: Message = {
+      role: 'user',
+      content: input,
+      timestamp: Date.now()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
     setIsLoading(true);
 
     try {
-      console.log('Sending message to Gemini:', userMessage);
-      const response = await generateTripPlan(userMessage);
-      console.log('Received response from Gemini:', response);
+      const response = await generateTripPlan(input);
       
-      setChatHistory(prev => [...prev, { role: 'assistant', content: response }]);
-      
-      // TODO: Parse response to extract locations and itinerary
-      // For now, just update with a mock location
-      onLocationUpdate([-74.006, 40.7128]); // New York City
+      // Try to extract and update itinerary
+      try {
+        // Extract the conversational part (everything before JSON_START)
+        const conversationalPart = response.split('<!--JSON_START-->')[0].trim();
+        
+        // Extract the JSON part
+        const jsonMatch = response.match(/<!--JSON_START-->([\s\S]*?)<!--JSON_END-->/);
+        if (jsonMatch) {
+          const itineraryText = jsonMatch[1].trim();
+          const itinerary = JSON.parse(itineraryText);
+          console.log('Parsed itinerary:', itinerary);
+          onItineraryUpdate(itinerary);
+        } else {
+          console.log('No JSON found in response');
+        }
+
+        // Update messages with just the conversational part
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: conversationalPart,
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      } catch (e) {
+        console.log('Error parsing response:', e);
+        // If parsing fails, show the full response
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
     } catch (error) {
-      console.error('Error in handleSend:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      setError(errorMessage);
-      setChatHistory(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again.' 
+      console.error('Error in chat:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: Date.now()
       }]);
     } finally {
       setIsLoading(false);
@@ -47,58 +100,86 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate, onLocationUpda
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Trip Planning Assistant</Typography>
-      
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      
-      <Box sx={{ flexGrow: 1, overflow: 'auto', mb: 2 }}>
-        {chatHistory.map((msg, index) => (
-          <Paper 
-            key={index} 
-            sx={{ 
-              p: 2, 
-              mb: 1, 
-              backgroundColor: msg.role === 'user' ? '#e3f2fd' : '#f5f5f5',
-              maxWidth: '80%',
-              ml: msg.role === 'user' ? 'auto' : 0
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      p: 2,
+      gap: 2,
+      bgcolor: 'background.paper'
+    }}>
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          flex: 1, 
+          overflow: 'auto',
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          bgcolor: 'background.default',
+          borderRadius: 2
+        }}
+      >
+        {messages.map((message, index) => (
+          <Box
+            key={index}
+            sx={{
+              alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: '80%'
             }}
           >
-            <Typography>{msg.content}</Typography>
-          </Paper>
+            <Paper
+              elevation={1}
+              sx={{
+                p: 2,
+                bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
+                color: message.role === 'user' ? 'white' : 'text.primary',
+                borderRadius: 2
+              }}
+            >
+              <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
+                {message.content}
+              </Typography>
+            </Paper>
+          </Box>
         ))}
-        {isLoading && (
-          <Typography sx={{ textAlign: 'center', color: 'text.secondary' }}>
-            Thinking...
-          </Typography>
-        )}
-      </Box>
-
-      <Box sx={{ display: 'flex', gap: 1 }}>
+        <div ref={messagesEndRef} />
+      </Paper>
+      
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 1,
+        p: 1,
+        bgcolor: 'background.paper',
+        borderRadius: 2
+      }}>
         <TextField
           fullWidth
           variant="outlined"
-          placeholder="Ask about your trip..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type your message..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSend()}
           disabled={isLoading}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 2,
+            }
+          }}
         />
         <Button
           variant="contained"
           onClick={handleSend}
-          disabled={isLoading || !message.trim()}
-          endIcon={<SendIcon />}
+          disabled={isLoading || !input.trim()}
+          sx={{
+            borderRadius: 2,
+            minWidth: '80px'
+          }}
         >
-          Send
+          {isLoading ? <CircularProgress size={24} /> : 'Send'}
         </Button>
       </Box>
     </Box>
   );
-};
-
-export default ChatPanel; 
+}; 

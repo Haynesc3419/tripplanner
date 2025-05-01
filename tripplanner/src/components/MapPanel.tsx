@@ -10,7 +10,7 @@ interface MapPanelProps {
 
 const DEFAULT_LOCATION: [number, number] = [-74.006, 40.7128]; // New York City coordinates
 
-const MapPanel: React.FC<MapPanelProps> = ({ currentLocation, itinerary }) => {
+export const MapPanel: React.FC<MapPanelProps> = ({ currentLocation, itinerary }) => {
   const mapboxToken = process.env.REACT_APP_MAPBOX_TOKEN;
   
   console.log('Mapbox Token:', mapboxToken); // Debug log
@@ -48,6 +48,4 @@ const MapPanel: React.FC<MapPanelProps> = ({ currentLocation, itinerary }) => {
       </Map>
     </Box>
   );
-};
-
-export default MapPanel; 
+}; 

@@ -19,12 +19,7 @@ class ConversationService {
 
   constructor() {
     // Initialize with system message about trip planning
-    this.addMessage('assistant', `I'm your AI trip planning assistant. I'll help you plan your perfect trip. 
-    Please tell me:
-    1. Where would you like to go?
-    2. When are you planning to travel?
-    3. What's your budget?
-    4. Any specific preferences or interests?`);
+    this.addMessage('assistant', 'I\'m your AI trip planning assistant. I\'ll help you plan your perfect trip. Please tell me: 1. Where would you like to go? 2. When are you planning to travel? 3. What\'s your budget? 4. Any specific preferences or interests?');
   }
 
   addMessage(role: 'user' | 'assistant', content: string) {
@@ -58,12 +53,7 @@ class ConversationService {
     this.messages = [];
     this.context = {};
     // Re-add the initial system message
-    this.addMessage('assistant', `I'm your AI trip planning assistant. I'll help you plan your perfect trip. 
-    Please tell me:
-    1. Where would you like to go?
-    2. When are you planning to travel?
-    3. What's your budget?
-    4. Any specific preferences or interests?`);
+    this.addMessage('assistant', 'I\'m your AI trip planning assistant. I\'ll help you plan your perfect trip. Please tell me: 1. Where would you like to go? 2. When are you planning to travel? 3. What\'s your budget? 4. Any specific preferences or interests?');
   }
 }
 

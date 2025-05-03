@@ -4,6 +4,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { MapPanel } from './components/MapPanel';
 import { OptionsPanel } from './components/OptionsPanel';
 import { ItineraryDrawer } from './components/ItineraryDrawer';
+import { generateTripPlan } from './services/geminiService';
 
 const theme = createTheme({
   palette: {
@@ -52,6 +53,53 @@ function App() {
   }>}>({ days: [] });
   const [currentLocation, setCurrentLocation] = useState<[number, number] | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [choices, setChoices] = useState<Array<{
+    type: string;
+    question: string;
+    options: Array<{
+      id: string;
+      name: string;
+      description: string;
+      price?: string;
+      location?: string;
+    }>;
+  }>>([]);
+  const [isProcessingChoice, setIsProcessingChoice] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+  }>>([]);
+
+  const handleAddMessage = (message: { role: 'user' | 'assistant'; content: string; timestamp: number }) => {
+    setChatMessages(prev => [...prev, message]);
+  };
+
+  const handleChoiceSelect = async (choiceId: string) => {
+    setIsProcessingChoice(true);
+    try {
+      // Find the selected option details
+      const selectedOption = choices.flatMap(choice => choice.options)
+        .find(option => option.id === choiceId);
+      
+      if (selectedOption) {
+        // Send the selected choice back to the LLM
+        const response = await generateTripPlan(`I choose ${selectedOption.name} (${selectedOption.id})`);
+        
+        // Update itinerary and choices based on the response
+        if (response.itinerary) {
+          setItinerary(response.itinerary);
+        }
+        if (response.choices) {
+          setChoices(response.choices);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing choice:', error);
+    } finally {
+      setIsProcessingChoice(false);
+    }
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -75,6 +123,8 @@ function App() {
         }}>
           <ChatPanel 
             onItineraryUpdate={setItinerary}
+            onChoicesUpdate={setChoices}
+            onAddMessage={handleAddMessage}
           />
         </Box>
 
@@ -109,6 +159,9 @@ function App() {
             itinerary={itinerary}
             onItineraryUpdate={setItinerary}
             onDrawerToggle={() => setIsDrawerOpen(true)}
+            onChoiceSelect={handleChoiceSelect}
+            choices={choices}
+            isProcessingChoice={isProcessingChoice}
           />
         </Box>
 

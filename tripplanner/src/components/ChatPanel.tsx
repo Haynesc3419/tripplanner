@@ -9,34 +9,75 @@ interface Message {
   timestamp: number;
 }
 
-interface ChatPanelProps {
-  onItineraryUpdate: (itinerary: any) => void;
+interface Choice {
+  type: string;
+  question: string;
+  options: Array<{
+    id: string;
+    name: string;
+    description: string;
+    price?: string;
+    location?: string;
+  }>;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate }) => {
+interface ChatPanelProps {
+  onItineraryUpdate: (itinerary: any) => void;
+  onChoicesUpdate: (choices: Choice[]) => void;
+  onAddMessage?: (message: Message) => void;
+}
+
+export const ChatPanel: React.FC<ChatPanelProps> = ({ 
+  onItineraryUpdate, 
+  onChoicesUpdate,
+  onAddMessage 
+}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Initialize with conversation history
-    const initialMessages = conversationService.getConversationHistory()
+  // Function to update messages from conversation history
+  const updateMessagesFromHistory = () => {
+    const history = conversationService.getConversationHistory();
+    const newMessages = history
       .split('\n')
+      .filter(line => line.trim())
       .map(line => {
         const [role, ...contentParts] = line.split(': ');
         return {
           role: role as 'user' | 'assistant',
-          content: contentParts.join(': '),
+          content: contentParts.join(': ').replace(/\\n/g, '\n'), // Handle newlines in content
           timestamp: Date.now()
         };
       });
-    setMessages(initialMessages);
+    setMessages(newMessages);
+  };
+
+  // Initialize messages and set up interval to check for updates
+  useEffect(() => {
+    updateMessagesFromHistory();
+    
+    // Check for updates every 500ms
+    const interval = setInterval(updateMessagesFromHistory, 500);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const addMessage = (message: Message) => {
+    console.log('Adding message:', message);
+    setMessages(prev => {
+      const newMessages = [...prev, message];
+      console.log('Updated messages:', newMessages);
+      return newMessages;
+    });
+    if (onAddMessage) {
+      onAddMessage(message);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -47,53 +88,40 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate }) => {
       timestamp: Date.now()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    addMessage(userMessage);
     setInput('');
     setIsLoading(true);
 
     try {
+      console.log('Sending message to LLM:', input);
       const response = await generateTripPlan(input);
+      console.log('Received response from LLM:', response);
       
-      // Try to extract and update itinerary
-      try {
-        // Extract the conversational part (everything before JSON_START)
-        const conversationalPart = response.split('<!--JSON_START-->')[0].trim();
-        
-        // Extract the JSON part
-        const jsonMatch = response.match(/<!--JSON_START-->([\s\S]*?)<!--JSON_END-->/);
-        if (jsonMatch) {
-          const itineraryText = jsonMatch[1].trim();
-          const itinerary = JSON.parse(itineraryText);
-          console.log('Parsed itinerary:', itinerary);
-          onItineraryUpdate(itinerary);
-        } else {
-          console.log('No JSON found in response');
-        }
-
-        // Update messages with just the conversational part
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: conversationalPart,
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      } catch (e) {
-        console.log('Error parsing response:', e);
-        // If parsing fails, show the full response
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: response,
-          timestamp: Date.now()
-        };
-        setMessages(prev => [...prev, assistantMessage]);
+      // Update itinerary
+      if (response.itinerary) {
+        onItineraryUpdate(response.itinerary);
       }
+
+      // Update choices
+      if (response.choices && response.choices.length > 0) {
+        onChoicesUpdate(response.choices);
+      }
+
+      // Update messages with the conversational part
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: response.conversation,
+        timestamp: Date.now()
+      };
+      console.log('Adding assistant message:', assistantMessage);
+      addMessage(assistantMessage);
     } catch (error) {
       console.error('Error in chat:', error);
-      setMessages(prev => [...prev, {
+      addMessage({
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: Date.now()
-      }]);
+      });
     } finally {
       setIsLoading(false);
     }
@@ -121,29 +149,32 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onItineraryUpdate }) => {
           borderRadius: 2
         }}
       >
-        {messages.map((message, index) => (
-          <Box
-            key={index}
-            sx={{
-              alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '80%'
-            }}
-          >
-            <Paper
-              elevation={1}
+        {messages.map((message, index) => {
+          console.log('Rendering message:', message);
+          return (
+            <Box
+              key={index}
               sx={{
-                p: 2,
-                bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
-                color: message.role === 'user' ? 'white' : 'text.primary',
-                borderRadius: 2
+                alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '80%'
               }}
             >
-              <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
-                {message.content}
-              </Typography>
-            </Paper>
-          </Box>
-        ))}
+              <Paper
+                elevation={1}
+                sx={{
+                  p: 2,
+                  bgcolor: message.role === 'user' ? 'primary.main' : 'background.paper',
+                  color: message.role === 'user' ? 'white' : 'text.primary',
+                  borderRadius: 2
+                }}
+              >
+                <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                </Typography>
+              </Paper>
+            </Box>
+          );
+        })}
         <div ref={messagesEndRef} />
       </Paper>
       
